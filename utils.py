@@ -18,7 +18,7 @@ def test(model, data, train_idx, test_idx, adj_t):
     out = model(data.x, adj_t)
     y_pred = out.argmax(dim=-1, keepdim=True)
 
-    train_acc = accuracy_score(data.y[train_idx], y_pred[train_idx])
-    test_acc = accuracy_score(data.y[test_idx], y_pred[test_idx])
+    train_acc = accuracy_score(data.y[train_idx].cpu(), y_pred[train_idx].cpu())
+    test_acc = accuracy_score(data.y[test_idx].cpu(), y_pred[test_idx].cpu())
 
     return train_acc, test_acc
