@@ -33,8 +33,8 @@ class GCN_Classifier(torch.nn.Module):
         
         for _ in range(self.hidden_layers-1):
             z = torch.sparse.mm(transition_matrix, z)
-            z = nn.Linear(self.hidden_dim, self.hidden_dim)(z)
-            z = nn.BatchNorm1d(num_features=self.hidden_dim)(z)
+            z = nn.Linear(self.hidden_dim, self.hidden_dim).to(z.device)(z)
+            z = nn.BatchNorm1d(num_features=self.hidden_dim).to(z.device)(z)
             z = self.ReLU(z)
             z = self.dropout(z)
 
