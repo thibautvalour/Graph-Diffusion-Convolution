@@ -1,55 +1,70 @@
-import torch
+import numpy as np
+import math as math
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-def compute_Tsym(adj): 
-    ''' adj is a sparse matrix'''
-    N = adj.shape[0]
-    D = torch.sparse.sum(adj, dim=1).to_dense() # get degree matrix D
-    D_sqrt_inv = torch.pow(D, -0.5)
-    indices = torch.arange(N).unsqueeze(0).repeat(2, 1).to(device)
-    D_sqrt_inv = torch.sparse_coo_tensor(indices, D_sqrt_inv,
-                                         size=(N, N))
-    
-    Tsym = D_sqrt_inv.matmul(adj).matmul(D_sqrt_inv)
-    return Tsym
 
 def gdc_pagerank(A, alpha, eps):
-
     N = A.shape[0]
 
-    # Self-loops
-    indices = torch.arange(N).unsqueeze(0).repeat(2, 1).to(device) 
-    values = torch.ones(N, dtype=torch.float).to(device) 
-    sparse_identiy = torch.sparse_coo_tensor(indices, values,
-                                             size=(N, N))    
-    
-    A_loop = A + sparse_identiy
+    # Self-loops 
+    A_loop = A + np.eye(N)
     
     # Symmetric transition matrix
-    D_loop = torch.sparse.sum(A_loop, dim=1).to_dense()
-    D_sqrt_inv = torch.pow(D_loop, -0.5)
-    D_sqrt_inv = torch.sparse_coo_tensor(indices, D_sqrt_inv,
-                                         size=(N, N))
-
+    D_loop = np.sum(A_loop, axis=1)
+    D_sqrt_inv = np.diag(1/np.sqrt(D_loop))
 
     T_sym = D_sqrt_inv @ A_loop @ D_sqrt_inv
 
     # PPR-based diffusion
-    S = alpha * torch.pow(sparse_identiy-(1-alpha)*T_sym, -1)
+    S = alpha * np.linalg.inv(np.eye(N) -(1-alpha)*T_sym)
 
-    # TODO : check why negative values are present in S
-    # Sparsify using threshold epsilon
-    indices = S.indices()
-    thresholded_val = S.values() * (S.values() >= eps)
-    S_tilde = torch.sparse_coo_tensor(indices, thresholded_val,
-                                      size=(N, N))
+    # Sparcify
+    S[S < eps] = 0
 
-    # Column-normalized transition matrix on graph S_tilde
-    D_tilde_vec = torch.sparse.sum(S_tilde, dim=1).to_dense()
-    indices = torch.arange(N).unsqueeze(0).repeat(2, 1).to(device) 
-    D_tilde_vec = torch.sparse_coo_tensor(indices, D_tilde_vec,
-                                            size=(N, N))
-    T_S = S_tilde @ torch.pow(D_tilde_vec, -1)
+    D_tilde = np.sum(S, axis=1)
+    D_tilde_inv = np.diag(1/D_tilde)
+    T_S = S @ D_tilde_inv
     
     return T_S
+
+
+def gdc_heat(A, t, sum_limit, eps):
+
+    N = A.shape[0]  
+    
+    A_loop = A + np.eye(N)
+    D_loop = np.sum(A_loop, axis=1)
+    D_sqrt_inv = np.diag(1/np.sqrt(D_loop))
+
+    T_sym = D_sqrt_inv @ A_loop @ D_sqrt_inv
+
+    S = np.zeros((N, N))
+    temp_mat = np.eye(N)
+    for k in range(sum_limit):
+        heat_coeff = math.exp(-t) * t**k / math.factorial(k)
+        S += heat_coeff * temp_mat
+        temp_mat = temp_mat @ T_sym
+
+    # Sparcification
+    S[S < eps] = 0
+
+    D_tilde = np.sum(S, axis=1)
+    D_tilde_inv = np.diag(1/D_tilde)
+    T_S = S @ D_tilde_inv
+    
+    return T_S
+
+def compute_Lsym(A):
+    N = A.shape[0]
+    D = np.sum(A, axis=1)
+    D_sqrt_inv = np.diag(1/np.sqrt(D))
+    Tsym = D_sqrt_inv @ A @ D_sqrt_inv
+
+    Lsym = np.eye(N) - Tsym
+    return Lsym
+
+def compute_Lrw(A):
+    N = A.shape[0]
+    D = np.sum(A, axis=1)
+    D_inv = np.diag(1/D)
+    Lrw = np.eye(N) - D_inv @ A
+    return Lrw

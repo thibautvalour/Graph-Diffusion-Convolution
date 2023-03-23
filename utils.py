@@ -1,4 +1,5 @@
 import torch
+from sklearn.metrics import accuracy_score
 
 def train(model, data, train_idx, adj_t, optimizer, loss_fn):
     model.train()
@@ -11,24 +12,13 @@ def train(model, data, train_idx, adj_t, optimizer, loss_fn):
     return loss.item()
 
 @torch.no_grad()
-def test(model, data, split_idx, adj_t, evaluator):
+def test(model, data, train_idx, test_idx, adj_t):
     model.eval()
 
-    # The output of model on all data
     out = model(data.x, adj_t)
     y_pred = out.argmax(dim=-1, keepdim=True)
 
-    train_acc = evaluator.eval({
-        'y_true': data.y[split_idx['train']],
-        'y_pred': y_pred[split_idx['train']],
-    })['acc']
-    valid_acc = evaluator.eval({
-        'y_true': data.y[split_idx['valid']],
-        'y_pred': y_pred[split_idx['valid']],
-    })['acc']
-    test_acc = evaluator.eval({
-        'y_true': data.y[split_idx['test']],
-        'y_pred': y_pred[split_idx['test']],
-    })['acc']
+    train_acc = accuracy_score(data.y[train_idx], y_pred[train_idx])
+    test_acc = accuracy_score(data.y[test_idx], y_pred[test_idx])
 
-    return train_acc, valid_acc, test_acc
+    return train_acc, test_acc
